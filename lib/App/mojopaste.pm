@@ -140,7 +140,7 @@ Check out L<Mojo::Server::Hypnotoad> for more hypnotoad options.
 =item * Command line interface
 
   $ cat /path/to/file |curl -F "txt=<-" http://xxx.xxx.xxx/'
-  $ curl -F "txt=</path/to/file" http:///'
+  $ curl -F "txt=</path/to/file" http://xxx.xxx.xxx/'
   $ curl -F "image=@/path/to/imagefile" http://xxx.xxx.xxx/'
 
 =back
