@@ -2,6 +2,7 @@
 use Mojolicious::Lite;
 use Mojo::Util qw( encode decode spurt slurp );
 use File::Path ();
+use File::Type;
 use constant HUMAN_JSON => eval 'require JSON;JSON->new->utf8(1)->relaxed(1)->allow_barekey(1)' || 0;
 
 plugin 'config' if $ENV{MOJO_CONFIG};
@@ -19,20 +20,52 @@ get '/' => sub {
 
 post '/' => sub {
   my $self = shift;
-  my($content, $paste_id);
-
-  $content = $self->param('content') || '';
-
-  unless($content =~ /\w/) {
-    return $self->render('pastebin', status => 400);
+  if($self->tx->req->headers->content_type =~ /multipart\/form-data/){
+    my($content, $paste_id,$host,$port);my $suffix="";
+    $host = $self->req->url->to_abs->host;
+    $port = $self->req->headers->header('X-Server-Port') || $self->req->url->to_abs->port;
+    $port = ":" . $port;
+    $port = "" if $port eq ":80";
+    return $self->rendered(413) if $self->req->headers->content_length > 1024*1024*2;
+    my $upload = $self->req->upload("image") || $self->req->upload("img");
+    if(not defined $upload){
+        my $txt = $self->req->param("text") || $self->req->param("txt");
+        return $self->rendered(400) if not defined $txt;
+        $content = $txt;$suffix="";;
+    }
+    else{
+        return $self->rendered(413) if $upload->size > 1024*1024*2;
+        $content = $upload->slurp;
+        my $mime = File::Type->new->mime_type($content);
+        $suffix  =      $mime=~/jpe?g/i        ?   ".jpg"
+                    :   $mime=~/png/i          ?   ".png"
+                    :   $mime=~/bmp/i          ?   ".bmp"
+                    :   $mime=~/gif/i          ?   ".gif"
+                    :                           undef
+        ;
+        return $self->rendered(403) if not defined $suffix;
+    }
+    do {
+        $paste_id = substr(Mojo::Util::md5_sum($$.time.rand), 0, 12);
+    } while -e "$paste_dir/$paste_id";
+    spurt $suffix?$content:encode("UTF-8", $content), "$paste_dir/$paste_id";
+    $self->render(text=>"http://$host$port/$paste_id$suffix",layout => undef);
   }
+  else{
+    my($content, $paste_id);
+    $content = $self->param('content') || '';
 
-  do {
-    $paste_id = substr Mojo::Util::md5_sum($$.time.rand), 0, 12;
-  } while -e "$paste_dir/$paste_id";
+    unless($content =~ /\w/) {
+        return $self->render('pastebin', status => 400);
+    }
 
-  spurt encode("UTF-8", $content), "$paste_dir/$paste_id";
-  $self->redirect_to('show', paste_id => $paste_id);
+    do {
+        $paste_id = substr Mojo::Util::md5_sum($$.time.rand), 0, 12;
+    } while -e "$paste_dir/$paste_id";
+
+    spurt encode("UTF-8", $content), "$paste_dir/$paste_id";
+    $self->redirect_to('show', paste_id => $paste_id);
+  }
 };
 
 get '/:paste_id', sub {
@@ -43,6 +76,12 @@ get '/:paste_id', sub {
 
   if(!$file->size) {
     $self->render(content => "Could not find paste '$paste_id'.", title => 'Could not find paste', status => 404);
+  }
+  if($format =~ /^(gif|png|jpg|bmp)$/){
+    my $type = $1;
+    $self->res->headers->content_type("image/$format");
+    $self->res->content->asset($file);
+    $self->rendered(200);
   }
   elsif($self->param('raw') or $format eq 'txt') {
     $self->res->headers->content_type('text/plain; charset=utf-8');

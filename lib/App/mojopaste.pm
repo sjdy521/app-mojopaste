@@ -137,6 +137,12 @@ data using L<morris.js|http://morrisjs.github.io/morris.js>
 
 Check out L<Mojo::Server::Hypnotoad> for more hypnotoad options.
 
+=item * Command line interface
+
+  $ cat /path/to/file |curl -F "txt=<-" http://xxx.xxx.xxx/'
+  $ curl -F "txt=</path/to/file" http:///'
+  $ curl -F "image=@/path/to/imagefile" http://xxx.xxx.xxx/'
+
 =back
 
 =head1 OTHER PASTEBINS
