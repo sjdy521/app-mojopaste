@@ -19,7 +19,8 @@ WriteMakefile(
 }
 ,
   PREREQ_PM => {
-  'Mojolicious' => '5.00'
+  'Mojolicious' => '6.15',
+  'File::Type'  => '0.22',
 }
 ,
   test => {TESTS => (-e 'META.yml' ? 't/*.t' : 't/*.t xt/*.t')},
