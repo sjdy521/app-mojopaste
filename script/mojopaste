@@ -290,4 +290,4 @@ window.addEventListener('load', function(e) {
 </nav>
 <pre class="prettyprint"><%= $content %></pre>
 @@ powered_by.html.ep
-<span class="powered-by">Powered by <a href="https://metacpan.org/pod/App::mojopaste#DESCRIPTION" title="Get mojopaste">Mojopaste</a></span>
+<span class="powered-by">Powered by <a href="https://github.com/sjdy521/app-mojopaste" title="Get mojopaste">Mojopaste</a></span>
