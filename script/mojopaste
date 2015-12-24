@@ -47,7 +47,7 @@ post '/' => sub {
         return $self->rendered(403) if not defined $suffix;
     }
     do {
-        $paste_id = substr(Mojo::Util::md5_sum($$.time.rand), 0, 12);
+        $paste_id = substr(Mojo::Util::md5_sum($$.time.rand), 0, 4);
     } while -e "$paste_dir/$paste_id";
     spurt $suffix?$content:encode("UTF-8", $content), "$paste_dir/$paste_id";
     $self->render(text=>"http://$host$port/$paste_id$suffix",layout => undef);
@@ -61,7 +61,7 @@ post '/' => sub {
     }
 
     do {
-        $paste_id = substr Mojo::Util::md5_sum($$.time.rand), 0, 12;
+        $paste_id = substr Mojo::Util::md5_sum($$.time.rand), 0, 4;
     } while -e "$paste_dir/$paste_id";
 
     spurt encode("UTF-8", $content), "$paste_dir/$paste_id";
