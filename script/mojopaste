@@ -1,8 +1,9 @@
 #!/usr/bin/env perl
 use Mojolicious::Lite;
-use Mojo::Util qw( encode decode spurt slurp );
+use Mojo::Util qw( encode decode);
 use File::Path ();
 use File::Type;
+use Carp;
 use constant HUMAN_JSON => eval 'require JSON;JSON->new->utf8(1)->relaxed(1)->allow_barekey(1)' || 0;
 
 plugin 'config' if $ENV{MOJO_CONFIG};
@@ -12,6 +13,23 @@ my $allow_robots  = app->config('allow_robots')  || $ENV{PASTE_ALLOW_ROBOTS};
 my $enable_charts = app->config('enable_charts') || $ENV{PASTE_ENABLE_CHARTS};
 my $paste_max_size  = app->config('paste_max_size') || $ENV{PASTE_MAX_SIZE} || 1024*1024*2;
 -d $paste_dir or File::Path::mkpath($paste_dir) or die "mkpath $paste_dir: $!";
+
+sub spurt {
+    my ($content, $path) = @_;
+    open my $file, '>', $path or Carp::croak qq{Can't open file "$path": $!};
+    defined $file->syswrite($content)
+        or Carp::croak qq{Can't write to file "$path": $!};
+    return $content;
+}
+
+sub slurp {
+    my $path = shift;
+    open my $file, '<', $path or Carp::croak qq{Can't open file "$path": $!};
+    my $ret = my $content = '';
+    while ($ret = $file->sysread(my $buffer, 131072, 0)) { $content .= $buffer }
+    Carp::croak qq{Can't read from file "$path": $!} unless defined $ret;
+    return $content;
+}
 
 get '/' => sub {
   my $self = shift;
@@ -38,11 +56,21 @@ post '/' => sub {
         return $self->rendered(413) if $upload->size > $paste_max_size;
         $content = $upload->slurp;
         my $mime = File::Type->new->mime_type($content);
-        $suffix  =      $mime=~/jpe?g/i        ?   ".jpg"
-                    :   $mime=~/png/i          ?   ".png"
-                    :   $mime=~/bmp/i          ?   ".bmp"
-                    :   $mime=~/gif/i          ?   ".gif"
-                    :                           undef
+        $suffix =       $mime=~/^image\/jpe?g/i        ?   ".jpg"
+                    :   $mime=~/^image\/png/i          ?   ".png"
+                    :   $mime=~/^image\/bmp/i          ?   ".bmp"
+                    :   $mime=~/^image\/gif/i          ?   ".gif"
+                    :   $mime=~/^text\/plain/i         ?   ".txt"
+                    :   $mime=~/^text\/html/i          ?   ".html"
+                    :   $mime=~/^text\/json/i          ?   ".json"
+                    :   $mime=~/^application\/json/i   ?   ".json"
+                    :   $mime=~/^video\/mp4/i          ?   ".mp4"
+                    :   $mime=~/^video\/quicktime/i    ?   ".mp4"
+                    :   $mime=~/^video\/mpeg/i         ?   ".mp4"
+                    :   $mime=~/^audio\/mpeg/i         ?   ".mp3"
+                    :   $mime=~/^audio\/mp3/i          ?   ".mp3"
+                    :   $mime=~/^application\/json/i   ?   ".json"
+                    :                                      ".dat"
         ;
         return $self->rendered(403) if not defined $suffix;
     }
@@ -78,9 +106,20 @@ get '/:paste_id', sub {
   if(!$file->size) {
     $self->render(content => "Could not find paste '$paste_id'.", title => 'Could not find paste', status => 404);
   }
-  if($format =~ /^(gif|png|jpg|bmp)$/){
-    my $type = $1;
-    $self->res->headers->content_type("image/$format");
+  my %mime_map = (
+    gif => 'image/gif',
+    jpg => 'image/jpg',
+    png => 'image/png',
+    bmp => 'image/bmp',
+    html=> 'text/html',
+    json=> 'text/json',
+    mp4 => 'video/mp4',
+    mp3 => 'audio/mp3',
+    dat => 'application/octet-stream',
+    #txt => 'text/plain',
+  );
+  if(exists $mime_map{$format}){
+    $self->res->headers->content_type($mime_map{$format});
     $self->res->content->asset($file);
     $self->rendered(200);
   }
