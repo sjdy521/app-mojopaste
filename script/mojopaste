@@ -7,6 +7,11 @@ use Carp;
 use constant HUMAN_JSON => eval 'require JSON;JSON->new->utf8(1)->relaxed(1)->allow_barekey(1)' || 0;
 
 plugin 'config' if $ENV{MOJO_CONFIG};
+app->config(hypnotoad => {
+    listen => ['http://127.0.0.1:48888'],
+    allow_robots => 0,
+    enable_charts => 1
+});
 
 my $paste_dir     = app->config('paste_dir')     || $ENV{PASTE_DIR} || '/tmp/mojopaste';
 my $allow_robots  = app->config('allow_robots')  || $ENV{PASTE_ALLOW_ROBOTS};
@@ -40,38 +45,42 @@ get '/' => sub {
 post '/' => sub {
   my $self = shift;
   if($self->tx->req->headers->content_type =~ /multipart\/form-data/){
-    my($content, $paste_id,$host,$port);my $suffix="";
+    my($content, $paste_id,$host,$port);
     $host = $self->req->url->to_abs->host;
-    $port = $self->req->headers->header('X-Server-Port') || $self->req->url->to_abs->port;
+    $port = $self->req->headers->header('X-Server-Port') // $self->req->url->to_abs->port;
     $port = ":" . $port;
     $port = "" if $port eq ":80";
-    return $self->rendered(413) if $self->req->headers->content_length > 1024*1024*2;
-    my $upload = $self->req->upload("image") || $self->req->upload("img");
+    return $self->rendered(413) if $self->req->headers->content_length > 1024*1024*5;
+    my $upload = $self->param("img") // $self->param("file") // $self->param("txt");
+    my $suffix =    $self->param('suffix')  ? $self->param('suffix') 
+                :   $self->param("txt")     ? '.txt' 
+                :   'auto';
     if(not defined $upload){
-        my $txt = $self->req->param("text") || $self->req->param("txt");
-        return $self->rendered(400) if not defined $txt;
-        $content = $txt;$suffix="";;
+        return $self->rendered(400);
+        $content ="";$suffix="";
     }
     else{
         return $self->rendered(413) if $upload->size > $paste_max_size;
         $content = $upload->slurp;
-        my $mime = File::Type->new->mime_type($content);
-        $suffix =       $mime=~/^image\/jpe?g/i        ?   ".jpg"
-                    :   $mime=~/^image\/png/i          ?   ".png"
-                    :   $mime=~/^image\/bmp/i          ?   ".bmp"
-                    :   $mime=~/^image\/gif/i          ?   ".gif"
-                    :   $mime=~/^text\/plain/i         ?   ".txt"
-                    :   $mime=~/^text\/html/i          ?   ".html"
-                    :   $mime=~/^text\/json/i          ?   ".json"
-                    :   $mime=~/^application\/json/i   ?   ".json"
-                    :   $mime=~/^video\/mp4/i          ?   ".mp4"
-                    :   $mime=~/^video\/quicktime/i    ?   ".mp4"
-                    :   $mime=~/^video\/mpeg/i         ?   ".mp4"
-                    :   $mime=~/^audio\/mpeg/i         ?   ".mp3"
-                    :   $mime=~/^audio\/mp3/i          ?   ".mp3"
-                    :   $mime=~/^application\/json/i   ?   ".json"
-                    :                                      ".dat"
-        ;
+        if($suffix eq 'auto'){
+            my $mime = File::Type->new->mime_type($content);
+            $suffix =       $mime=~/^image\/jpe?g/i        ?   ".jpg"
+                        :   $mime=~/^image\/png/i          ?   ".png"
+                        :   $mime=~/^image\/bmp/i          ?   ".bmp"
+                        :   $mime=~/^image\/gif/i          ?   ".gif"
+                        :   $mime=~/^text\/plain/i         ?   ".txt"
+                        :   $mime=~/^text\/html/i          ?   ".html"
+                        :   $mime=~/^text\/json/i          ?   ".json"
+                        :   $mime=~/^application\/json/i   ?   ".json"
+                        :   $mime=~/^video\/mp4/i          ?   ".mp4"
+                        :   $mime=~/^video\/quicktime/i    ?   ".mp4"
+                        :   $mime=~/^video\/mpeg/i         ?   ".mp4"
+                        :   $mime=~/^audio\/mpeg/i         ?   ".mp3"
+                        :   $mime=~/^audio\/mp3/i          ?   ".mp3"
+                        :   $mime=~/^application\/json/i   ?   ".json"
+                        :                                      ".dat"
+            ;
+        }
         return $self->rendered(403) if not defined $suffix;
     }
     do {
@@ -282,6 +291,15 @@ __DATA__
 </head>
 
 <body>
+  <!--
+  <div>
+  输入文本内容然后点击左下角的[粘帖]按钮, 将地址栏出现的新地址分享给小伙伴.
+  你也可以在命令行环境下使用:
+  cat something.txt|curl https://paste.perfi.wang -F txt=@-
+  cat something.jpg|curl https://paste.perfi.wang -F img=@-
+  cat something.png|curl https://paste.perfi.wang -F img=@- -F suffix=.png
+  </div>
+  -->
   %= content
 </body>
 </html>
